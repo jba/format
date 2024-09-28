@@ -132,8 +132,11 @@ func (s *state) print(v reflect.Value) {
 	case reflect.Struct:
 		s.printStruct(v)
 
+	case reflect.Func, reflect.Chan:
+		s.prf("%T(%[1]v)", value)
+
 	default:
-		s.pr("<unknown reflect kind>")
+		s.prf("<unknown reflect kind:%s>", v.Kind())
 	}
 }
 

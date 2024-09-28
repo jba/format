@@ -21,7 +21,7 @@ func TestCompact(t *testing.T) {
 		{in: true, want: "true"},
 		{in: 1.5, want: "1.5"},
 		{in: 3 - 4i, want: "(3-4i)"},
-		{in: ptr(5), want: "*5"},
+		{in: ptr(5), want: "&5"},
 		{
 			in:   []int{2, 3, 4},
 			want: "[]{2, 3, 4}",
@@ -36,7 +36,7 @@ func TestCompact(t *testing.T) {
 		},
 		{
 			in:   []*int{ptr(4), ptr(5)},
-			want: "[]{*4, *5}",
+			want: "[]{&4, &5}",
 		},
 		{
 			in:   map[string]int{"b": 2, "a": 1},
@@ -82,8 +82,16 @@ func TestCompact(t *testing.T) {
 			want: `format.Player{}`, // zeroes elided
 		},
 		{
-			in:   &node{1, &node{2, &node{3, nil}}},
-			want: "&node",
+			in:   &node{1, &node{2, nil}},
+			want: "&format.node{I: 1, Next: &format.node{I: 2}}",
+		},
+		{
+			in: func() any {
+				n := &node{I: 1}
+				n.Next = n
+				return n
+			}(),
+			want: "&format.node{I: 1, Next: <cycle>}",
 		},
 	} {
 		test.f.Compact = true
