@@ -7,40 +7,56 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"golang.org/x/tools/txtar"
 )
 
-func TestCompact(t *testing.T) {
+func TestSprint(t *testing.T) {
+	ar, err := txtar.ParseFile("uncompact.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uwants := map[string]string{}
+	for _, f := range ar.Files {
+		uwants[f.Name] = string(f.Data)
+	}
+
 	for _, test := range []struct {
-		f           Formatter
-		in          any
-		want        string
-		unprintable bool
+		f             Formatter
+		in            any
+		want          string
+		wantUncompact string // txtar file name
+		unprintable   bool
 	}{
-		{in: nil, want: "nil"},
-		{in: 123, want: "123"},
-		{in: true, want: "true"},
-		{in: 1.5, want: "1.5"},
-		{in: 3 - 4i, want: "(3-4i)"},
-		{in: ptr(5), want: "&5"},
+		// {in: nil, want: "nil"},
+		// {in: 123, want: "123"},
+		// {in: true, want: "true", wantUncompact: "bool"},
+		// {in: 1.5, want: "1.5"},
+		// {in: 3 - 4i, want: "(3-4i)"},
+		// {in: ptr(5), want: "&5"},
 		{
-			in:   []int{2, 3, 4},
-			want: "[]{2, 3, 4}",
+			in:            []int{2, 3, 4},
+			want:          "[]{2, 3, 4}",
+			wantUncompact: "intslice1",
 		},
 		{
-			in:   []int{2, 3, 4, 5, 6, 99, 100},
-			want: "[]{2, 3, 4, 5, 6, ...}",
+			in:            []int{2, 3, 4, 5, 6, 99, 100},
+			want:          "[]{2, 3, 4, 5, 6, ...}",
+			wantUncompact: "intslice2",
 		},
 		{
-			in:   [...]string{"", "x"},
-			want: `[2]{"", "x"}`,
+			in:            [...]string{"", "x"},
+			want:          `[2]{"", "x"}`,
+			wantUncompact: "array",
 		},
 		{
 			in:   []*int{ptr(4), ptr(5)},
 			want: "[]{&4, &5}",
 		},
 		{
-			in:   map[string]int{"b": 2, "a": 1},
-			want: `{"a": 1, "b": 2}`,
+			in:            map[string]int{"b": 2, "a": 1},
+			want:          `{"a": 1, "b": 2}`,
+			wantUncompact: "map1",
 		},
 		{
 			in:   map[int]int{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 99: 99},
@@ -56,7 +72,8 @@ func TestCompact(t *testing.T) {
 				s[1] = &s
 				return s
 			}(),
-			want: "[]{1, &[]{1, <cycle>}}",
+			want:          "[]{1, &[]{1, <cycle>}}",
+			wantUncompact: "sliceCycle",
 		},
 		{
 			// MaxDepth handles this case.
@@ -93,17 +110,35 @@ func TestCompact(t *testing.T) {
 			}(),
 			want: "&format.node{I: 1, Next: <cycle>}",
 		},
+		// { doesn't work too well, but maybe we only care about Compact=false
+		// 	f:    Formatter{MaxWidth: 20},
+		// 	in:   []int{1000, 2000, 3000, 4000},
+		// 	want: "[]{1000, 2000, 3000}",
+		// },
 	} {
-		test.f.Compact = true
-		test.f.MaxDepth = 5
-		test.f.MaxElements = 5
-		got := test.f.Sprint(test.in)
-		if got != test.want {
-			in := "<unprintable>"
-			if !test.unprintable {
-				in = fmt.Sprintf("%+v", test.in)
+		for _, c := range []bool{ /*true, */ false} {
+			if !c && test.wantUncompact == "" {
+				continue
 			}
-			t.Errorf("%+v.Sprint(%s):\ngot  %s\nwant %s", test.f, in, got, test.want)
+			test.f.Compact = c
+			want := test.want
+			if !c {
+				var ok bool
+				want, ok = uwants[test.wantUncompact]
+				if !ok {
+					t.Fatalf("txtar file missing %q", test.wantUncompact)
+				}
+			}
+			test.f.MaxDepth = 5
+			test.f.MaxElements = 5
+			got := test.f.Sprint(test.in)
+			if got != want {
+				in := "<unprintable>"
+				if !test.unprintable {
+					in = fmt.Sprintf("%+v", test.in)
+				}
+				t.Errorf("%+v.Sprint(%s):\ngot\n%q\nwant\n%q", test.f, in, got, want)
+			}
 		}
 	}
 }

@@ -140,15 +140,26 @@ func (s *state) print(v reflect.Value) {
 	}
 }
 
+// print slice or array
 func (s *state) printSlice(v reflect.Value) {
 	if v.Kind() == reflect.Array {
 		s.prf("[%d]{", v.Len())
 	} else {
 		s.pr("[]{")
 	}
+	if !s.Compact {
+		s.pr("\n")
+	}
 	for i := range v.Len() {
 		if s.MaxElements > 0 && i >= s.MaxElements {
-			s.pr(", ...")
+			if s.Compact {
+				s.pr(", ...")
+			} else {
+				// fmt.Printf("## s.col=%d, s.depth=%d\n", s.col, s.depth)
+				s.depth++
+				s.pr("...\n")
+				s.depth--
+			}
 			break
 		}
 		if i > 0 && s.Compact {
@@ -160,7 +171,6 @@ func (s *state) printSlice(v reflect.Value) {
 		}
 	}
 	s.pr("}")
-
 }
 
 func (s *state) printMap(v reflect.Value) {
@@ -168,6 +178,9 @@ func (s *state) printMap(v reflect.Value) {
 	slices.SortFunc(keys, compareValues)
 	// TODO: use mapiter for NaNs?
 	s.pr("{")
+	if !s.Compact {
+		s.pr("\n")
+	}
 	for i, key := range keys {
 		if s.MaxElements > 0 && i >= s.MaxElements {
 			s.pr(", ...")
@@ -180,6 +193,9 @@ func (s *state) printMap(v reflect.Value) {
 		s.print(key)
 		s.pr(": ")
 		s.print(val)
+		if !s.Compact {
+			s.pr(",\n")
+		}
 	}
 	s.pr("}")
 }
@@ -216,6 +232,7 @@ func (s *state) prf(format string, args ...any) {
 }
 
 func (s *state) pr(str string) {
+	// fmt.Printf("## pr(%q): depth=%d, col=%d\n", str, s.depth, s.col)
 	// Observe MaxWidth
 	if s.MaxWidth > 0 && s.col+len(str) >= s.MaxWidth {
 		s.write("\n")
@@ -234,8 +251,8 @@ func (s *state) pr(str string) {
 	s.col += len(str) // assume one column per character
 
 	// If we wrote a newline, adjust col.
-	if i := strings.LastIndex(str, "\n"); i > 0 {
-		s.col = len(str) - i
+	if i := strings.LastIndex(str, "\n"); i >= 0 {
+		s.col = len(str) - i - 1
 	}
 }
 
