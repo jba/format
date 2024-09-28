@@ -1,6 +1,9 @@
-// TODO: MIT
+// Copyright (c) 2024 Jonathan Amsterdam
+// Use of this source code is governed by the license in the LICENSE file.
 
+// TODO: unexported values; https://stackoverflow.com/questions/42664837/how-to-access-unexported-struct-fields/43918797#43918797
 // TODO: doc
+
 package format
 
 import (
@@ -15,13 +18,13 @@ import (
 )
 
 type Formatter struct {
-	HideUnexported bool   // do not display unexported fields
-	HideZero       bool   // do not display fields that have their zero value
-	MaxWidth       int    // maximum columns, but not breaking words
-	Compact        bool   // as few lines as possible, observing MaxWidth
-	Indent         string // ignored if Compact; default is 4 spaces
-	MaxDepth       int    // max recursion depth; default is 100
-	// MaxElements    int
+	// ShowUnexported bool   // display unexported fields
+	ShowZero    bool   // display struct fields that have their zero value
+	MaxWidth    int    // maximum columns, but not breaking words
+	Compact     bool   // as few lines as possible, observing MaxWidth
+	Indent      string // ignored if Compact; default is 4 spaces
+	MaxDepth    int    // max recursion depth; default is 100
+	MaxElements int    // max array, slice or map elements to print
 }
 
 func Sprint(x any) string { return (Formatter{}).Sprint(x) }
@@ -99,7 +102,7 @@ func (s *state) print(v reflect.Value) {
 		}
 	}
 
-	switch kind := v.Kind(); kind {
+	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 		reflect.Uintptr, reflect.UnsafePointer,
@@ -121,43 +124,88 @@ func (s *state) print(v reflect.Value) {
 		s.print(v.Elem())
 
 	case reflect.Array, reflect.Slice:
-		if kind == reflect.Array {
-			s.prf("[%d]{", v.Len())
-		} else {
-			s.pr("[]{")
-		}
-		for i := range v.Len() {
-			if i > 0 && s.Compact {
-				s.pr(", ")
-			}
-			s.print(v.Index(i))
-			if !s.Compact {
-				s.pr(",\n")
-			}
-		}
-		s.pr("}")
+		s.printSlice(v)
 
 	case reflect.Map:
-		keys := v.MapKeys()
-		slices.SortFunc(keys, compareValues)
-		// TODO: use mapiter for NaNs.
-		s.pr("{")
-		for i, key := range keys {
-			if i > 0 && s.Compact {
-				s.pr(", ")
-			}
-			val := v.MapIndex(key)
-			s.print(key)
-			s.pr(": ")
-			s.print(val)
-		}
-		s.pr("}")
+		s.printMap(v)
 
 	case reflect.Struct:
-		s.pr("STRUCT")
+		s.printStruct(v)
+
 	default:
 		s.pr("<unknown reflect kind>")
 	}
+}
+
+func (s *state) printSlice(v reflect.Value) {
+	if v.Kind() == reflect.Array {
+		s.prf("[%d]{", v.Len())
+	} else {
+		s.pr("[]{")
+	}
+	for i := range v.Len() {
+		if s.MaxElements > 0 && i >= s.MaxElements {
+			s.pr(", ...")
+			break
+		}
+		if i > 0 && s.Compact {
+			s.pr(", ")
+		}
+		s.print(v.Index(i))
+		if !s.Compact {
+			s.pr(",\n")
+		}
+	}
+	s.pr("}")
+
+}
+
+func (s *state) printMap(v reflect.Value) {
+	keys := v.MapKeys()
+	slices.SortFunc(keys, compareValues)
+	// TODO: use mapiter for NaNs?
+	s.pr("{")
+	for i, key := range keys {
+		if s.MaxElements > 0 && i >= s.MaxElements {
+			s.pr(", ...")
+			break
+		}
+		if i > 0 && s.Compact {
+			s.pr(", ")
+		}
+		val := v.MapIndex(key)
+		s.print(key)
+		s.pr(": ")
+		s.print(val)
+	}
+	s.pr("}")
+}
+
+func (s *state) printStruct(v reflect.Value) {
+	t := v.Type()
+	s.prf("%s{", t)
+	first := true
+	for i := range t.NumField() {
+		sf := t.Field(i)
+		if len(sf.Index) != 1 {
+			panic("len(index) != 1")
+		}
+		if !sf.IsExported() {
+			continue
+		}
+		val := v.Field(i)
+		if !s.ShowZero && val.IsZero() {
+			continue
+		}
+		if !first && s.Compact {
+			s.pr(", ")
+		}
+		s.pr(sf.Name)
+		s.pr(": ")
+		s.print(val)
+		first = false
+	}
+	s.pr("}")
 }
 
 func (s *state) prf(format string, args ...any) {

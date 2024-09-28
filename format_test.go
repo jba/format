@@ -1,4 +1,5 @@
-// MIT
+// Copyright (c) 2024 Jonathan Amsterdam
+// Use of this source code is governed by the license in the LICENSE file.
 
 package format
 
@@ -26,6 +27,10 @@ func TestCompact(t *testing.T) {
 			want: "[]{2, 3, 4}",
 		},
 		{
+			in:   []int{2, 3, 4, 5, 6, 99, 100},
+			want: "[]{2, 3, 4, 5, 6, ...}",
+		},
+		{
 			in:   [...]string{"", "x"},
 			want: `[2]{"", "x"}`,
 		},
@@ -36,6 +41,10 @@ func TestCompact(t *testing.T) {
 		{
 			in:   map[string]int{"b": 2, "a": 1},
 			want: `{"a": 1, "b": 2}`,
+		},
+		{
+			in:   map[int]int{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 99: 99},
+			want: `{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, ...}`,
 		},
 		{
 			in:   map[any]int{"b": 2, 13: 1, 3 + 5i: 3, 7i: 4, 21: 5},
@@ -60,6 +69,18 @@ func TestCompact(t *testing.T) {
 			want:        "[]{1, []{1, []{<maxdepth>, <maxdepth>}}}",
 			unprintable: true,
 		},
+		{
+			in:   Player{"Al", 11, true},
+			want: `format.Player{Name: "Al", Score: 11}`,
+		},
+		{
+			in:   Player{"Al", 0, true},
+			want: `format.Player{Name: "Al"}`, // zeroes elided
+		},
+		{
+			in:   Player{},
+			want: `format.Player{}`, // zeroes elided
+		},
 		// {
 		// 	in: &node{1, &node{2, &node{3, nil}}},
 		// 	// want:
@@ -67,6 +88,7 @@ func TestCompact(t *testing.T) {
 	} {
 		test.f.Compact = true
 		test.f.MaxDepth = 5
+		test.f.MaxElements = 5
 		got := test.f.Sprint(test.in)
 		if got != test.want {
 			in := "<unprintable>"
@@ -76,6 +98,12 @@ func TestCompact(t *testing.T) {
 			t.Errorf("%+v.Sprint(%s):\ngot  %s\nwant %s", test.f, in, got, test.want)
 		}
 	}
+}
+
+type Player struct {
+	Name   string
+	Score  int
+	hidden bool
 }
 
 func TestCompareValues(t *testing.T) {
