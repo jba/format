@@ -56,7 +56,7 @@ func TestCompact(t *testing.T) {
 				s[1] = &s
 				return s
 			}(),
-			want: "[]{1, *[]{1, <cycle>}}",
+			want: "[]{1, &[]{1, <cycle>}}",
 		},
 		{
 			// MaxDepth handles this case.
@@ -81,10 +81,10 @@ func TestCompact(t *testing.T) {
 			in:   Player{},
 			want: `format.Player{}`, // zeroes elided
 		},
-		// {
-		// 	in: &node{1, &node{2, &node{3, nil}}},
-		// 	// want:
-		// }
+		{
+			in:   &node{1, &node{2, &node{3, nil}}},
+			want: "&node",
+		},
 	} {
 		test.f.Compact = true
 		test.f.MaxDepth = 5
@@ -151,6 +151,6 @@ func TestCompareValues(t *testing.T) {
 func ptr[T any](t T) *T { return &t }
 
 type node struct {
-	i    int
-	next *node
+	I    int
+	Next *node
 }

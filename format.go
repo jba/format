@@ -118,8 +118,8 @@ func (s *state) print(v reflect.Value) {
 		s.print(v.Elem())
 
 	case reflect.Pointer:
-		s.pr("*")
-		// TODO: no linebreak between * and the rest.
+		s.pr("&")
+		// TODO: no linebreak between & and the rest.
 		// We also shouldn't increment depth; maybe s.printWithPrefix?
 		s.print(v.Elem())
 
