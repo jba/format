@@ -17,6 +17,7 @@ import (
 	"strings"
 )
 
+// default is good for diffs in tests
 type Formatter struct {
 	// ShowUnexported bool   // display unexported fields
 	ShowZero    bool   // display struct fields that have their zero value
@@ -25,6 +26,7 @@ type Formatter struct {
 	Indent      string // ignored if Compact; default is 4 spaces
 	MaxDepth    int    // max recursion depth; default is 100
 	MaxElements int    // max array, slice or map elements to print
+	OmitPackage bool   // don't print package in type names
 }
 
 func Sprint(x any) string { return (Formatter{}).Sprint(x) }
@@ -44,17 +46,17 @@ func (f Formatter) Print(x any) error {
 }
 
 func (f Formatter) Fprint(w io.Writer, x any) error {
+	if f.Indent == "" {
+		f.Indent = "    "
+	}
+	if f.MaxDepth <= 0 {
+		f.MaxDepth = 100
+	}
 	s := &state{
 		Formatter: f,
 		w:         w,
 		seen:      map[any]bool{},
 		depth:     -1,
-	}
-	if f.Indent == "" {
-		s.Indent = "    "
-	}
-	if f.MaxDepth <= 0 {
-		f.MaxDepth = 100
 	}
 	s.print(reflect.ValueOf(x))
 	if s.err != nil {
@@ -133,7 +135,7 @@ func (s *state) print(v reflect.Value) {
 		s.printStruct(v)
 
 	case reflect.Func, reflect.Chan:
-		s.prf("%T(%[1]v)", value)
+		s.prf("%s(%[1]v)", s.typeName(v.Type()))
 
 	default:
 		s.prf("<unknown reflect kind:%s>", v.Kind())
@@ -155,7 +157,6 @@ func (s *state) printSlice(v reflect.Value) {
 			if s.Compact {
 				s.pr(", ...")
 			} else {
-				// fmt.Printf("## s.col=%d, s.depth=%d\n", s.col, s.depth)
 				s.depth++
 				s.pr("...\n")
 				s.depth--
@@ -202,7 +203,7 @@ func (s *state) printMap(v reflect.Value) {
 
 func (s *state) printStruct(v reflect.Value) {
 	t := v.Type()
-	s.prf("%s{", t)
+	s.prf("%s{", s.typeName(t))
 	first := true
 	for i := range t.NumField() {
 		sf := t.Field(i)
@@ -227,12 +228,22 @@ func (s *state) printStruct(v reflect.Value) {
 	s.pr("}")
 }
 
+func (s *state) typeName(t reflect.Type) string {
+	n := t.String()
+	if !s.OmitPackage {
+		return n
+	}
+	if i := strings.LastIndex(n, "."); i > 0 {
+		return n[i+1:]
+	}
+	return n
+}
+
 func (s *state) prf(format string, args ...any) {
 	s.pr(fmt.Sprintf(format, args...))
 }
 
 func (s *state) pr(str string) {
-	// fmt.Printf("## pr(%q): depth=%d, col=%d\n", str, s.depth, s.col)
 	// Observe MaxWidth
 	if s.MaxWidth > 0 && s.col+len(str) >= s.MaxWidth {
 		s.write("\n")
@@ -240,7 +251,7 @@ func (s *state) pr(str string) {
 	}
 
 	// Observe indent.
-	if s.col == 0 {
+	if !s.Compact && s.col == 0 {
 		for range s.depth {
 			s.write(s.Indent)
 		}
@@ -296,6 +307,7 @@ func compareValues(v1, v2 reflect.Value) int {
 		return cmp.Compare(v1.Float(), v2.Float())
 	}
 	// Either string or not cmp.Ordered; do our best.
+	// TODO: prevent Sprint from blowing stack on non-pointer cycles.
 	return cmp.Compare(fmt.Sprint(v1), fmt.Sprint(v2))
 }
 

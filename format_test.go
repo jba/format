@@ -88,19 +88,19 @@ func TestSprint(t *testing.T) {
 		},
 		{
 			in:   Player{"Al", 11, true},
-			want: `format.Player{Name: "Al", Score: 11}`,
+			want: `Player{Name: "Al", Score: 11}`,
 		},
 		{
 			in:   Player{"Al", 0, true},
-			want: `format.Player{Name: "Al"}`, // zeroes elided
+			want: `Player{Name: "Al"}`, // zeroes elided
 		},
 		{
 			in:   Player{},
-			want: `format.Player{}`, // zeroes elided
+			want: `Player{}`, // zeroes elided
 		},
 		{
 			in:   &node{1, &node{2, nil}},
-			want: "&format.node{I: 1, Next: &format.node{I: 2}}",
+			want: "&node{I: 1, Next: &node{I: 2}}",
 		},
 		{
 			in: func() any {
@@ -108,19 +108,20 @@ func TestSprint(t *testing.T) {
 				n.Next = n
 				return n
 			}(),
-			want: "&format.node{I: 1, Next: <cycle>}",
+			want: "&node{I: 1, Next: <cycle>}",
 		},
-		// { doesn't work too well, but maybe we only care about Compact=false
-		// 	f:    Formatter{MaxWidth: 20},
-		// 	in:   []int{1000, 2000, 3000, 4000},
-		// 	want: "[]{1000, 2000, 3000}",
-		// },
+		{
+			f:    Formatter{MaxWidth: 20},
+			in:   []int{1000, 2000, 3000, 4000},
+			want: "[]{1000, 2000, 3000,\n4000}",
+		},
 	} {
-		for _, c := range []bool{ /*true, */ false} {
+		for _, c := range []bool{true, false} {
 			if !c && test.wantUncompact == "" {
 				continue
 			}
 			test.f.Compact = c
+			test.f.OmitPackage = true
 			want := test.want
 			if !c {
 				var ok bool
@@ -137,7 +138,8 @@ func TestSprint(t *testing.T) {
 				if !test.unprintable {
 					in = fmt.Sprintf("%+v", test.in)
 				}
-				t.Errorf("%+v.Sprint(%s):\ngot\n%q\nwant\n%q", test.f, in, got, want)
+				fs := Formatter{Compact: true, OmitPackage: true}.Sprint(test.f)
+				t.Errorf("%s.Sprint(%s):\ngot\n%q\nwant\n%q", fs, in, got, want)
 			}
 		}
 	}
