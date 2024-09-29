@@ -28,12 +28,12 @@ func TestSprint(t *testing.T) {
 		wantUncompact string // txtar file name
 		unprintable   bool
 	}{
-		// {in: nil, want: "nil"},
-		// {in: 123, want: "123"},
-		// {in: true, want: "true", wantUncompact: "bool"},
-		// {in: 1.5, want: "1.5"},
-		// {in: 3 - 4i, want: "(3-4i)"},
-		// {in: ptr(5), want: "&5"},
+		{in: nil, want: "nil"},
+		{in: 123, want: "123"},
+		{in: true, want: "true", wantUncompact: "bool"},
+		{in: 1.5, want: "1.5"},
+		{in: 3 - 4i, want: "(3-4i)"},
+		{in: ptr(5), want: "&5"},
 		{
 			in:            []int{2, 3, 4},
 			want:          "[]{2, 3, 4}",
@@ -83,7 +83,7 @@ func TestSprint(t *testing.T) {
 				s[1] = s
 				return s
 			}(),
-			want:        "[]{1, []{1, []{<maxdepth>, <maxdepth>}}}",
+			want:        "[]{1, []{1, []{1, []{1, []{1, []{<maxdepth>, <maxdepth>}}}}}}",
 			unprintable: true,
 		},
 		{
@@ -139,7 +139,7 @@ func TestSprint(t *testing.T) {
 					in = fmt.Sprintf("%+v", test.in)
 				}
 				fs := Formatter{Compact: true, OmitPackage: true}.Sprint(test.f)
-				t.Errorf("%s.Sprint(%s):\ngot\n%q\nwant\n%q", fs, in, got, want)
+				t.Errorf("%s.Sprint(%s):\ngot\n%s\nwant\n%s", fs, in, got, want)
 			}
 		}
 	}

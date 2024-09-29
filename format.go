@@ -3,6 +3,8 @@
 
 // TODO: unexported values; https://stackoverflow.com/questions/42664837/how-to-access-unexported-struct-fields/43918797#43918797
 // TODO: doc
+// TODO: named slice/array/map types
+// TODO: unnamed struct types
 
 package format
 
@@ -86,7 +88,10 @@ func (s *state) print(v reflect.Value) {
 		s.pr("<maxdepth>")
 		return
 	}
+	s.printSameDepth(v)
+}
 
+func (s *state) printSameDepth(v reflect.Value) {
 	if !v.IsValid() {
 		s.pr("nil")
 		return
@@ -117,13 +122,12 @@ func (s *state) print(v reflect.Value) {
 		s.prf("%q", v)
 
 	case reflect.Interface:
-		s.print(v.Elem())
+		s.printSameDepth(v.Elem())
 
 	case reflect.Pointer:
 		s.pr("&")
 		// TODO: no linebreak between & and the rest.
-		// We also shouldn't increment depth; maybe s.printWithPrefix?
-		s.print(v.Elem())
+		s.printSameDepth(v.Elem())
 
 	case reflect.Array, reflect.Slice:
 		s.printSlice(v)
@@ -155,7 +159,7 @@ func (s *state) printSlice(v reflect.Value) {
 	for i := range v.Len() {
 		if s.MaxElements > 0 && i >= s.MaxElements {
 			if s.Compact {
-				s.pr(", ...")
+				s.pr("...")
 			} else {
 				s.depth++
 				s.pr("...\n")
@@ -163,12 +167,9 @@ func (s *state) printSlice(v reflect.Value) {
 			}
 			break
 		}
-		if i > 0 && s.Compact {
-			s.pr(", ")
-		}
 		s.print(v.Index(i))
-		if !s.Compact {
-			s.pr(",\n")
+		if !s.Compact || i != v.Len()-1 {
+			s.after(",")
 		}
 	}
 	s.pr("}")
@@ -184,18 +185,15 @@ func (s *state) printMap(v reflect.Value) {
 	}
 	for i, key := range keys {
 		if s.MaxElements > 0 && i >= s.MaxElements {
-			s.pr(", ...")
+			s.pr("...")
 			break
-		}
-		if i > 0 && s.Compact {
-			s.pr(", ")
 		}
 		val := v.MapIndex(key)
 		s.print(key)
-		s.pr(": ")
+		s.between(":")
 		s.print(val)
-		if !s.Compact {
-			s.pr(",\n")
+		if !s.Compact || i != len(keys)-1 {
+			s.after(",")
 		}
 	}
 	s.pr("}")
@@ -221,7 +219,7 @@ func (s *state) printStruct(v reflect.Value) {
 			s.pr(", ")
 		}
 		s.pr(sf.Name)
-		s.pr(": ")
+		s.between(":")
 		s.print(val)
 		first = false
 	}
@@ -239,32 +237,50 @@ func (s *state) typeName(t reflect.Type) string {
 	return n
 }
 
+func (s *state) after(str string) {
+	s.write(str)
+	s.checkWidth("")
+	if s.col != 0 {
+		if s.Compact {
+			s.write(" ")
+		} else {
+			s.write("\n")
+		}
+	}
+}
+
+func (s *state) between(str string) {
+	s.write(str)
+	s.checkWidth("")
+	if s.col != 0 {
+		s.write(" ")
+	}
+}
+
+// Observe MaxWidth.
+func (s *state) checkWidth(str string) {
+	if s.MaxWidth > 0 && s.col+len(str) >= s.MaxWidth {
+		s.write("\n")
+	}
+}
+
 func (s *state) prf(format string, args ...any) {
 	s.pr(fmt.Sprintf(format, args...))
 }
 
 func (s *state) pr(str string) {
-	// Observe MaxWidth
-	if s.MaxWidth > 0 && s.col+len(str) >= s.MaxWidth {
-		s.write("\n")
-		s.col = 0
+	if s.err != nil {
+		return
 	}
+	s.checkWidth(str)
 
 	// Observe indent.
 	if !s.Compact && s.col == 0 {
 		for range s.depth {
 			s.write(s.Indent)
 		}
-		s.col = s.depth * len(s.Indent)
 	}
-
 	s.write(str)
-	s.col += len(str) // assume one column per character
-
-	// If we wrote a newline, adjust col.
-	if i := strings.LastIndex(str, "\n"); i >= 0 {
-		s.col = len(str) - i - 1
-	}
 }
 
 func (s *state) write(str string) {
@@ -272,6 +288,12 @@ func (s *state) write(str string) {
 		return
 	}
 	_, s.err = io.WriteString(s.w, str)
+	// Adjust col. Assume one column per character.
+	if i := strings.LastIndex(str, "\n"); i >= 0 {
+		s.col = len(str) - i - 1
+	} else {
+		s.col += len(str)
+	}
 }
 
 // TODO: call Equal method if any.

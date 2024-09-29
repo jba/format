@@ -29,7 +29,8 @@ true
 -- sliceCycle --
 []{
     1,
-    &[]{1,
-        <cycle>
+    &[]{
+        1,
+        <cycle>,
     },
 }
