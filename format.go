@@ -19,7 +19,11 @@ import (
 	"strings"
 )
 
-// default is good for diffs in tests
+// A Formatter formats Go values.
+// It follows pointers recursively, detecting cycles.
+// Configure a Formatter by setting the exported fields before
+// calling a formatting method.
+// The defaults are designed to work well in tests.
 type Formatter struct {
 	// ShowUnexported bool   // display unexported fields
 	ShowZero    bool   // display struct fields that have their zero value
@@ -31,22 +35,28 @@ type Formatter struct {
 	OmitPackage bool   // don't print package in type names
 }
 
+// Sprint calls [Formatter.Sprint] with the default Formatter.
 func Sprint(x any) string { return (Formatter{}).Sprint(x) }
 
-func Fprint(w io.Writer, x any) error { return (Formatter{}).Fprint(w, x) }
-
+// Print calls [Formatter.Print] with the default Formatter.
 func Print(x any) error { return (Formatter{}).Print(x) }
 
+// Fprint calls [Formatter.Fprint] with the default Formatter.
+func Fprint(w io.Writer, x any) error { return (Formatter{}).Fprint(w, x) }
+
+// Sprint formats x and returns a string.
 func (f Formatter) Sprint(x any) string {
 	var buf bytes.Buffer
 	_ = f.Fprint(&buf, x)
 	return buf.String()
 }
 
+// Print formats x and writes to the standard output.
 func (f Formatter) Print(x any) error {
 	return f.Fprint(os.Stdout, x)
 }
 
+// Fprint formats x and writes to w.
 func (f Formatter) Fprint(w io.Writer, x any) error {
 	if f.Indent == "" {
 		f.Indent = "    "
@@ -333,7 +343,7 @@ func compareValues(v1, v2 reflect.Value) int {
 	return cmp.Compare(fmt.Sprint(v1), fmt.Sprint(v2))
 }
 
-// isOrdered reports whether values of type t can be compare with <, >, etc.
+// isOrdered reports whether values of type t can be compared with <, >, etc.
 func isOrdered(t reflect.Type) bool {
 	switch t.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
