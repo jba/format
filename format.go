@@ -91,14 +91,20 @@ type state struct {
 	err   error
 }
 
-func (s *state) print(v reflect.Value) {
+func (s *state) deeper(f func()) {
 	s.depth++
 	defer func() { s.depth-- }()
 	if s.depth > s.MaxDepth {
 		s.pr("<maxdepth>")
 		return
 	}
-	s.printSameDepth(v)
+	f()
+}
+
+func (s *state) print(v reflect.Value) {
+	s.deeper(func() {
+		s.printSameDepth(v)
+	})
 }
 
 func (s *state) printSameDepth(v reflect.Value) {
@@ -212,6 +218,9 @@ func (s *state) printMap(v reflect.Value) {
 func (s *state) printStruct(v reflect.Value) {
 	t := v.Type()
 	s.prf("%s{", s.typeName(t))
+	if !s.Compact {
+		s.pr("\n")
+	}
 	first := true
 	for i := range t.NumField() {
 		sf := t.Field(i)
@@ -228,10 +237,13 @@ func (s *state) printStruct(v reflect.Value) {
 		if !first && s.Compact {
 			s.pr(", ")
 		}
-		s.pr(sf.Name)
+		s.deeper(func() { s.pr(sf.Name) })
 		s.between(":")
 		s.print(val)
 		first = false
+		if !s.Compact {
+			s.pr("\n")
+		}
 	}
 	s.pr("}")
 }

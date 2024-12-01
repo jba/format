@@ -99,8 +99,9 @@ func TestSprint(t *testing.T) {
 			want: `Player{}`, // zeroes elided
 		},
 		{
-			in:   &node{1, &node{2, nil}},
-			want: "&node{I: 1, Next: &node{I: 2}}",
+			in:            &node{1, &node{2, nil}},
+			want:          "&node{I: 1, Next: &node{I: 2}}",
+			wantUncompact: "struct",
 		},
 		{
 			in: func() any {

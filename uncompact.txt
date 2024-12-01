@@ -34,3 +34,10 @@ true
         <cycle>,
     },
 }
+-- struct --
+&node{
+    I: 1
+    Next: &node{
+        I: 2
+    }
+}
