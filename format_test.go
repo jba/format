@@ -116,6 +116,16 @@ func TestSprint(t *testing.T) {
 			in:   []int{1000, 2000, 3000, 4000},
 			want: "[]{1000, 2000, 3000,\n4000}",
 		},
+		{
+			f: func() Formatter {
+				var f Formatter
+				f.IgnoreFields(node{}, "Next")
+				return f
+			}(),
+			in:            &node{I: 1, Next: &node{I: 2}},
+			want:          "&node{I: 1}",
+			wantUncompact: "struct ignore",
+		},
 	} {
 		for _, c := range []bool{true, false} {
 			if !c && test.wantUncompact == "" {
@@ -139,7 +149,7 @@ func TestSprint(t *testing.T) {
 				if !test.unprintable {
 					in = fmt.Sprintf("%+v", test.in)
 				}
-				fs := Formatter{Compact: true, OmitPackage: true}.Sprint(test.f)
+				fs := (&Formatter{Compact: true, OmitPackage: true}).Sprint(test.f)
 				t.Errorf("%s.Sprint(%s):\ngot\n%s\nwant\n%s", fs, in, got, want)
 			}
 		}

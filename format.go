@@ -26,38 +26,62 @@ import (
 // The defaults are designed to work well in tests.
 type Formatter struct {
 	// ShowUnexported bool   // display unexported fields
-	ShowZero    bool   // display struct fields that have their zero value
-	MaxWidth    int    // maximum columns, but not breaking words
-	Compact     bool   // as few lines as possible, observing MaxWidth
-	Indent      string // ignored if Compact; default is 4 spaces
-	MaxDepth    int    // max recursion depth; default is 100
-	MaxElements int    // max array, slice or map elements to print
-	OmitPackage bool   // don't print package in type names
+	ShowZero     bool   // display struct fields that have their zero value
+	MaxWidth     int    // maximum columns, but not breaking words
+	Compact      bool   // as few lines as possible, observing MaxWidth
+	Indent       string // ignored if Compact; default is 4 spaces
+	MaxDepth     int    // max recursion depth; default is 100
+	MaxElements  int    // max array, slice or map elements to print
+	OmitPackage  bool   // don't print package in type names
+	ignoreFields map[reflect.Type][]string
+}
+
+// New returns a new default Formatter.
+func New() *Formatter {
+	return &Formatter{}
+}
+
+// IgnoreFields causes f to skip printing of the named fields of values of structval's type.
+// Structval must be a struct or a pointer to a struct.
+// It returns its receiver.
+func (f *Formatter) IgnoreFields(structval any, fields ...string) *Formatter {
+	t := reflect.TypeOf(structval)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("%#v is not a struct or pointer to struct", structval))
+	}
+	if f.ignoreFields == nil {
+		f.ignoreFields = map[reflect.Type][]string{}
+	}
+	f.ignoreFields[t] = append(f.ignoreFields[t], fields...)
+	return f
 }
 
 // Sprint calls [Formatter.Sprint] with the default Formatter.
-func Sprint(x any) string { return (Formatter{}).Sprint(x) }
+func Sprint(x any) string { return New().Sprint(x) }
 
 // Print calls [Formatter.Print] with the default Formatter.
-func Print(x any) error { return (Formatter{}).Print(x) }
+func Print(x any) error { return New().Print(x) }
 
 // Fprint calls [Formatter.Fprint] with the default Formatter.
-func Fprint(w io.Writer, x any) error { return (Formatter{}).Fprint(w, x) }
+func Fprint(w io.Writer, x any) error { return New().Fprint(w, x) }
 
 // Sprint formats x and returns a string.
-func (f Formatter) Sprint(x any) string {
+func (f *Formatter) Sprint(x any) string {
 	var buf bytes.Buffer
 	_ = f.Fprint(&buf, x)
 	return buf.String()
 }
 
 // Print formats x and writes to the standard output.
-func (f Formatter) Print(x any) error {
+func (f *Formatter) Print(x any) error {
 	return f.Fprint(os.Stdout, x)
 }
 
 // Fprint formats x and writes to w.
-func (f Formatter) Fprint(w io.Writer, x any) error {
+func (f *Formatter) Fprint(w io.Writer, x any) error {
 	if f.Indent == "" {
 		f.Indent = "    "
 	}
@@ -83,7 +107,7 @@ func (f Formatter) Fprint(w io.Writer, x any) error {
 }
 
 type state struct {
-	Formatter
+	*Formatter
 	w     io.Writer
 	seen  map[any]bool
 	depth int
@@ -217,6 +241,7 @@ func (s *state) printMap(v reflect.Value) {
 
 func (s *state) printStruct(v reflect.Value) {
 	t := v.Type()
+	ignore := s.ignoreFields[t]
 	s.prf("%s{", s.typeName(t))
 	if !s.Compact {
 		s.pr("\n")
@@ -224,9 +249,13 @@ func (s *state) printStruct(v reflect.Value) {
 	first := true
 	for i := range t.NumField() {
 		sf := t.Field(i)
+		if slices.Contains(ignore, sf.Name) {
+			continue
+		}
 		if len(sf.Index) != 1 {
 			panic("len(index) != 1")
 		}
+
 		if !sf.IsExported() {
 			continue
 		}

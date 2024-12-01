@@ -41,3 +41,7 @@ true
         I: 2
     }
 }
+-- struct ignore --
+&node{
+    I: 1
+}
